@@ -1,0 +1,186 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Button, Card, Popconfirm, Space, Table, Tag, message } from "antd";
+import { useRouter } from "next/navigation";
+import DashboardShell from "@/components/DashboardShell";
+
+type OrderItem = {
+  id: number;
+  inventory_item_id: number;
+  product_name: string;
+  brand_name: string;
+  flavor_name: string;
+  qty: number;
+  created_at: string;
+};
+
+type Order = {
+  id: number;
+  order_no: string;
+  customer_info: string;
+  remark?: string;
+  created_by: string;
+  updated_by?: string;
+  total_qty: number;
+  created_at: string;
+  updated_at?: string;
+  order_items: OrderItem[];
+};
+
+export default function OrdersPage() {
+  const router = useRouter();
+  const [rows, setRows] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  async function loadOrders() {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/orders", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 401) router.replace("/login");
+        if (res.status === 403) router.replace("/inventory");
+        return;
+      }
+
+      setRows(data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(orderId: number) {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        message.error(data.error || "删除失败");
+        return;
+      }
+
+      message.success(data.message || "删除成功");
+      loadOrders();
+    } catch {
+      message.error("删除失败");
+    }
+  }
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  return (
+    <DashboardShell adminOnly>
+      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>订单列表</h1>
+
+      <Card style={{ marginBottom: 24 }}>
+        <Space wrap>
+          <Button type="primary" href="/orders/new">
+            添加订单
+          </Button>
+          <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
+          <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
+        </Space>
+      </Card>
+
+      <Card>
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={rows}
+          pagination={{ pageSize: 10 }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: 8 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>客户信息：</strong>
+                  <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>
+                    {record.customer_info}
+                  </div>
+                </div>
+
+                {record.remark ? (
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>备注：</strong>
+                    <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>
+                      {record.remark}
+                    </div>
+                  </div>
+                ) : null}
+
+                <Table
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={record.order_items || []}
+                  columns={[
+                    { title: "产品", dataIndex: "product_name" },
+                    { title: "品牌", dataIndex: "brand_name" },
+                    { title: "口味", dataIndex: "flavor_name" },
+                    { title: "数量", dataIndex: "qty" },
+                  ]}
+                />
+              </div>
+            ),
+          }}
+          columns={[
+            { title: "订单号", dataIndex: "order_no" },
+            {
+              title: "客户信息",
+              dataIndex: "customer_info",
+              render: (value: string) => (
+                <div style={{ maxWidth: 260, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {value}
+                </div>
+              ),
+            },
+            {
+              title: "商品数",
+              dataIndex: "order_items",
+              render: (items: OrderItem[]) => <Tag>{items?.length || 0} 个商品</Tag>,
+            },
+            { title: "总数量", dataIndex: "total_qty" },
+            { title: "创建人", dataIndex: "created_by" },
+            { title: "最后修改人", dataIndex: "updated_by", render: (v: string) => v || "-" },
+            {
+              title: "创建时间",
+              dataIndex: "created_at",
+              render: (value: string) => new Date(value).toLocaleString(),
+            },
+            {
+              title: "修改时间",
+              dataIndex: "updated_at",
+              render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
+            },
+            {
+              title: "操作",
+              render: (_, record) => (
+                <Space>
+                  <Button type="link" href={`/orders/${record.id}/edit`}>
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="确认删除这个订单吗？"
+                    description="删除后会自动把库存加回去"
+                    onConfirm={() => handleDelete(record.id)}
+                    okText="确认"
+                    cancelText="取消"
+                  >
+                    <Button type="link" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
+    </DashboardShell>
+  );
+}

@@ -37,6 +37,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeBrandTab, setActiveBrandTab] = useState("ALL");
+  const [searchText, setSearchText] = useState("");
   const [form] = Form.useForm();
 
   async function loadInventory() {
@@ -105,11 +106,30 @@ export default function InventoryPage() {
   }, []);
 
   const filteredRows = useMemo(() => {
-    if (activeBrandTab === "ALL") {
-      return rows;
+    let result = [...rows];
+
+    if (activeBrandTab !== "ALL") {
+      result = result.filter((item) => item.brand_name === activeBrandTab);
     }
-    return rows.filter((item) => item.brand_name === activeBrandTab);
-  }, [rows, activeBrandTab]);
+
+    const keyword = searchText.trim().toLowerCase();
+
+    if (keyword) {
+      result = result.filter((item) => {
+        const product = String(item.product_name || "").toLowerCase();
+        const brand = String(item.brand_name || "").toLowerCase();
+        const flavor = String(item.flavor_name || "").toLowerCase();
+
+        return (
+          product.includes(keyword) ||
+          brand.includes(keyword) ||
+          flavor.includes(keyword)
+        );
+      });
+    }
+
+    return result;
+  }, [rows, activeBrandTab, searchText]);
 
   const totalCount = filteredRows.length;
   const totalStockQty = filteredRows.reduce(
@@ -118,10 +138,7 @@ export default function InventoryPage() {
   );
 
   const tabItems = [
-    {
-      key: "ALL",
-      label: `全部`,
-    },
+    { key: "ALL", label: "全部" },
     ...BRAND_OPTIONS.map((brand) => ({
       key: brand.value,
       label: brand.value,
@@ -159,10 +176,7 @@ export default function InventoryPage() {
               rules={[{ required: true, message: "请选择品牌" }]}
               style={{ width: 220 }}
             >
-              <Select
-                placeholder="请选择品牌"
-                options={BRAND_OPTIONS}
-              />
+              <Select placeholder="请选择品牌" options={BRAND_OPTIONS} />
             </Form.Item>
 
             <Form.Item
@@ -217,6 +231,15 @@ export default function InventoryPage() {
           items={tabItems}
           style={{ marginBottom: 12 }}
         />
+
+        <div style={{ marginBottom: 16, maxWidth: 360 }}>
+          <Input
+            placeholder="搜索产品 / 品牌 / 口味"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            allowClear
+          />
+        </div>
 
         <Table
           rowKey="id"

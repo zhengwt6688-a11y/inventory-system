@@ -32,6 +32,12 @@ type DraftItem = {
   qty?: number;
 };
 
+type SelectOption = {
+  label: string;
+  value: number;
+  searchText: string;
+};
+
 export default function NewOrderPage() {
   const [form] = Form.useForm();
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
@@ -118,12 +124,26 @@ export default function NewOrderPage() {
     [items]
   );
 
-  const selectOptions = inventoryOptions.map((item) => ({
-    label: `${item.product_name} / ${item.brand_name} / ${item.flavor_name}（库存:${item.stock_qty}）`,
-    value: item.id,
-  }));
+  const selectOptions: SelectOption[] = useMemo(() => {
+    return inventoryOptions.map((item) => ({
+      label: `${item.product_name} / ${item.brand_name} / ${item.flavor_name}（库存:${item.stock_qty}）`,
+      value: item.id,
+      searchText: [
+        item.product_name,
+        item.brand_name,
+        item.flavor_name,
+        String(item.stock_qty),
+      ]
+        .join(" ")
+        .toLowerCase(),
+    }));
+  }, [inventoryOptions]);
 
-  async function submitOrder(values: { order_no: string; customer_info: string; remark?: string }) {
+  async function submitOrder(values: {
+    order_no: string;
+    customer_info: string;
+    remark?: string;
+  }) {
     const invalidRow = items.find(
       (item) =>
         !item.inventory_item_id ||
@@ -219,11 +239,22 @@ export default function NewOrderPage() {
                   dataIndex: "inventory_item_id",
                   render: (_, record) => (
                     <Select
+                      showSearch
+                      allowClear
                       style={{ width: "100%" }}
-                      placeholder="请选择商品"
+                      placeholder="请输入产品/品牌/口味搜索"
                       value={record.inventory_item_id}
                       options={selectOptions}
-                      onChange={(value) => handleSelectInventory(record.row_id, value)}
+                      optionFilterProp="label"
+                      filterOption={(input, option) => {
+                        const keyword = String(input || "").trim().toLowerCase();
+                        if (!keyword) return true;
+                        return String((option as SelectOption)?.searchText || "").includes(keyword);
+                      }}
+                      onChange={(value) => {
+                        if (!value) return;
+                        handleSelectInventory(record.row_id, value);
+                      }}
                     />
                   ),
                 },

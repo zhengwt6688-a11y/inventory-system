@@ -12,7 +12,7 @@ import {
   message,
 } from "antd";
 import { useParams, useRouter } from "next/navigation";
-import AuthHeader from "@/components/AuthHeader";
+import DashboardShell from "@/components/DashboardShell";
 
 type InventoryOption = {
   id: number;
@@ -33,6 +33,12 @@ type DraftItem = {
   qty?: number;
 };
 
+type SelectOption = {
+  label: string;
+  value: number;
+  searchText: string;
+};
+
 export default function EditOrderPage() {
   const [form] = Form.useForm();
   const params = useParams();
@@ -43,8 +49,6 @@ export default function EditOrderPage() {
   const [items, setItems] = useState<DraftItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [displayName, setDisplayName] = useState("...");
-  const [role, setRole] = useState<"admin" | "user" | null>(null);
 
   const rowCounterRef = useRef(1);
 
@@ -55,23 +59,6 @@ export default function EditOrderPage() {
       qty: 1,
       ...item,
     };
-  }
-
-  async function loadCurrentUser() {
-    const res = await fetch("/api/me");
-    const data = await res.json();
-
-    if (!res.ok) {
-      router.push("/login");
-      return;
-    }
-
-    setDisplayName(data.displayName || "unknown");
-    setRole(data.role);
-
-    if (data.role !== "admin") {
-      router.push("/inventory");
-    }
   }
 
   async function loadInventoryOptions() {
@@ -121,7 +108,6 @@ export default function EditOrderPage() {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      await loadCurrentUser();
       await loadInventoryOptions();
       await loadOrder();
       setLoading(false);
@@ -200,10 +186,20 @@ export default function EditOrderPage() {
     return items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   }, [items]);
 
-  const selectOptions = inventoryOptions.map((item) => ({
-    label: `${item.product_name} / ${item.brand_name} / ${item.flavor_name}（库存:${item.stock_qty}）`,
-    value: item.id,
-  }));
+  const selectOptions: SelectOption[] = useMemo(() => {
+    return inventoryOptions.map((item) => ({
+      label: `${item.product_name} / ${item.brand_name} / ${item.flavor_name}（库存:${item.stock_qty}）`,
+      value: item.id,
+      searchText: [
+        item.product_name,
+        item.brand_name,
+        item.flavor_name,
+        String(item.stock_qty),
+      ]
+        .join(" ")
+        .toLowerCase(),
+    }));
+  }, [inventoryOptions]);
 
   async function handleSubmit(values: any) {
     const invalidRow = items.find(
@@ -253,17 +249,11 @@ export default function EditOrderPage() {
     }
   }
 
-  if (!role) return null;
-
   return (
-    <main style={{ padding: 24 }}>
-      <AuthHeader displayName={displayName} role={role} />
-
+    <DashboardShell adminOnly>
       <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>编辑订单</h1>
 
       <Card loading={loading}>
-        <div style={{ marginBottom: 16 }}>当前操作人：{displayName}</div>
-
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             label="订单号"
@@ -305,11 +295,22 @@ export default function EditOrderPage() {
                   dataIndex: "inventory_item_id",
                   render: (_, record) => (
                     <Select
+                      showSearch
+                      allowClear
                       style={{ width: "100%" }}
-                      placeholder="请选择商品"
+                      placeholder="请输入产品/品牌/口味搜索"
                       value={record.inventory_item_id}
                       options={selectOptions}
-                      onChange={(value) => handleSelectInventory(record.row_id, value)}
+                      optionFilterProp="label"
+                      filterOption={(input, option) => {
+                        const keyword = String(input || "").trim().toLowerCase();
+                        if (!keyword) return true;
+                        return String((option as SelectOption)?.searchText || "").includes(keyword);
+                      }}
+                      onChange={(value) => {
+                        if (!value) return;
+                        handleSelectInventory(record.row_id, value);
+                      }}
                     />
                   ),
                 },
@@ -363,6 +364,6 @@ export default function EditOrderPage() {
           </div>
         </Form>
       </Card>
-    </main>
+    </DashboardShell>
   );
 }

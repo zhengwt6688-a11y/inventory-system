@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Form, Input, InputNumber, Space, Table, message, Card } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Space,
+  Table,
+  message,
+  Card,
+  Select,
+  Tabs,
+  Tag,
+} from "antd";
 import DashboardShell from "@/components/DashboardShell";
 
 type InventoryItem = {
@@ -14,16 +26,23 @@ type InventoryItem = {
   updated_at: string;
 };
 
+const BRAND_OPTIONS = [
+  { label: "Alibarbar", value: "Alibarbar" },
+  { label: "IGET ONE", value: "IGET ONE" },
+  { label: "IGET BAR PRO", value: "IGET BAR PRO" },
+];
+
 export default function InventoryPage() {
   const [rows, setRows] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [activeBrandTab, setActiveBrandTab] = useState("ALL");
   const [form] = Form.useForm();
 
   async function loadInventory() {
     try {
       setLoading(true);
-      const res = await fetch("/api/inventory-items");
+      const res = await fetch("/api/inventory-items", { cache: "no-store" });
       const data = await res.json();
 
       if (!res.ok) {
@@ -48,12 +67,19 @@ export default function InventoryPage() {
     try {
       setSubmitting(true);
 
+      const payload = {
+        product_name: String(values.product_name || "").trim(),
+        brand_name: String(values.brand_name || "").trim(),
+        flavor_name: String(values.flavor_name || "").trim(),
+        stock_qty: Number(values.stock_qty || 0),
+      };
+
       const res = await fetch("/api/inventory-items", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -65,6 +91,7 @@ export default function InventoryPage() {
 
       message.success(data.message || "操作成功");
       form.resetFields();
+      form.setFieldValue("stock_qty", 0);
       loadInventory();
     } catch {
       message.error("添加失败");
@@ -77,14 +104,45 @@ export default function InventoryPage() {
     loadInventory();
   }, []);
 
+  const filteredRows = useMemo(() => {
+    if (activeBrandTab === "ALL") {
+      return rows;
+    }
+    return rows.filter((item) => item.brand_name === activeBrandTab);
+  }, [rows, activeBrandTab]);
+
+  const totalCount = filteredRows.length;
+  const totalStockQty = filteredRows.reduce(
+    (sum, item) => sum + Number(item.stock_qty || 0),
+    0
+  );
+
+  const tabItems = [
+    {
+      key: "ALL",
+      label: `全部`,
+    },
+    ...BRAND_OPTIONS.map((brand) => ({
+      key: brand.value,
+      label: brand.value,
+    })),
+  ];
+
   return (
     <DashboardShell>
-      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>库存管理</h1>
+      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>
+        库存管理
+      </h1>
 
       <Card style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 20, marginBottom: 16 }}>添加库存</h2>
 
-        <Form form={form} layout="vertical" onFinish={handleAdd}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleAdd}
+          initialValues={{ stock_qty: 0 }}
+        >
           <Space align="start" size={16} wrap style={{ width: "100%" }}>
             <Form.Item
               label="产品"
@@ -92,16 +150,19 @@ export default function InventoryPage() {
               rules={[{ required: true, message: "请输入产品" }]}
               style={{ width: 220 }}
             >
-              <Input placeholder="例如：9000" />
+              <Input placeholder="例如：9000 / Ali-Cool Mint" />
             </Form.Item>
 
             <Form.Item
               label="品牌"
               name="brand_name"
-              rules={[{ required: true, message: "请输入品牌" }]}
+              rules={[{ required: true, message: "请选择品牌" }]}
               style={{ width: 220 }}
             >
-              <Input placeholder="例如：Alibarbar" />
+              <Select
+                placeholder="请选择品牌"
+                options={BRAND_OPTIONS}
+              />
             </Form.Item>
 
             <Form.Item
@@ -110,15 +171,14 @@ export default function InventoryPage() {
               rules={[{ required: true, message: "请输入口味" }]}
               style={{ width: 220 }}
             >
-              <Input placeholder="例如：Mango" />
+              <Input placeholder="例如：Mango / Grape Ice" />
             </Form.Item>
 
             <Form.Item
               label="库存"
               name="stock_qty"
-              initialValue={0}
               rules={[{ required: true, message: "请输入库存" }]}
-              style={{ width: 180 }}
+              style={{ width: 160 }}
             >
               <InputNumber min={0} style={{ width: "100%" }} />
             </Form.Item>
@@ -133,18 +193,53 @@ export default function InventoryPage() {
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: 20, marginBottom: 16 }}>库存列表</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 8,
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <h2 style={{ fontSize: 20, margin: 0 }}>库存列表</h2>
+
+          <Space wrap>
+            <Tag color="blue">记录数：{totalCount}</Tag>
+            <Tag color="green">库存总数：{totalStockQty}</Tag>
+          </Space>
+        </div>
+
+        <Tabs
+          activeKey={activeBrandTab}
+          onChange={setActiveBrandTab}
+          items={tabItems}
+          style={{ marginBottom: 12 }}
+        />
 
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={rows}
+          dataSource={filteredRows}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: "产品", dataIndex: "product_name" },
-            { title: "品牌", dataIndex: "brand_name" },
-            { title: "口味", dataIndex: "flavor_name" },
-            { title: "库存", dataIndex: "stock_qty" },
+            {
+              title: "产品",
+              dataIndex: "product_name",
+            },
+            {
+              title: "品牌",
+              dataIndex: "brand_name",
+            },
+            {
+              title: "口味",
+              dataIndex: "flavor_name",
+            },
+            {
+              title: "库存",
+              dataIndex: "stock_qty",
+            },
             {
               title: "更新时间",
               dataIndex: "updated_at",

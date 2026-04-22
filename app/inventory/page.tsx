@@ -14,6 +14,7 @@ import {
   Tabs,
   Tag,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import DashboardShell from "@/components/DashboardShell";
 
 type InventoryItem = {
@@ -31,6 +32,14 @@ const BRAND_OPTIONS = [
   { label: "IGET ONE", value: "IGET ONE" },
   { label: "IGET BAR PRO", value: "IGET BAR PRO" },
 ];
+
+const LOW_STOCK_THRESHOLD = 5;
+
+function getStockLevel(stockQty: number) {
+  if (stockQty <= 0) return "out";
+  if (stockQty <= LOW_STOCK_THRESHOLD) return "low";
+  return "normal";
+}
 
 export default function InventoryPage() {
   const [rows, setRows] = useState<InventoryItem[]>([]);
@@ -136,6 +145,14 @@ export default function InventoryPage() {
     (sum, item) => sum + Number(item.stock_qty || 0),
     0
   );
+  const lowStockCount = filteredRows.filter(
+    (item) =>
+      Number(item.stock_qty) > 0 &&
+      Number(item.stock_qty) <= LOW_STOCK_THRESHOLD
+  ).length;
+  const outOfStockCount = filteredRows.filter(
+    (item) => Number(item.stock_qty) <= 0
+  ).length;
 
   const tabItems = [
     { key: "ALL", label: "全部" },
@@ -143,6 +160,61 @@ export default function InventoryPage() {
       key: brand.value,
       label: brand.value,
     })),
+  ];
+
+  const columns: ColumnsType<InventoryItem> = [
+    {
+      title: "产品",
+      dataIndex: "product_name",
+    },
+    {
+      title: "品牌",
+      dataIndex: "brand_name",
+    },
+    {
+      title: "口味",
+      dataIndex: "flavor_name",
+    },
+    {
+      title: "库存",
+      dataIndex: "stock_qty",
+      sorter: (a, b) => Number(a.stock_qty || 0) - Number(b.stock_qty || 0),
+      sortDirections: ["descend", "ascend"],
+      render: (value: number) => {
+        const stockQty = Number(value || 0);
+        const level = getStockLevel(stockQty);
+
+        if (level === "out") {
+          return (
+            <Space>
+              <span style={{ color: "#cf1322", fontWeight: 700 }}>{stockQty}</span>
+              <Tag color="red">缺货</Tag>
+            </Space>
+          );
+        }
+
+        if (level === "low") {
+          return (
+            <Space>
+              <span style={{ color: "#d46b08", fontWeight: 700 }}>{stockQty}</span>
+              <Tag color="orange">低库存</Tag>
+            </Space>
+          );
+        }
+
+        return (
+          <Space>
+            <span>{stockQty}</span>
+            <Tag color="green">正常</Tag>
+          </Space>
+        );
+      },
+    },
+    {
+      title: "更新时间",
+      dataIndex: "updated_at",
+      render: (value: string) => new Date(value).toLocaleString(),
+    },
   ];
 
   return (
@@ -222,6 +294,8 @@ export default function InventoryPage() {
           <Space wrap>
             <Tag color="blue">记录数：{totalCount}</Tag>
             <Tag color="green">库存总数：{totalStockQty}</Tag>
+            <Tag color="orange">低库存：{lowStockCount}</Tag>
+            <Tag color="red">缺货：{outOfStockCount}</Tag>
           </Space>
         </div>
 
@@ -246,31 +320,25 @@ export default function InventoryPage() {
           loading={loading}
           dataSource={filteredRows}
           pagination={{ pageSize: 10 }}
-          columns={[
-            {
-              title: "产品",
-              dataIndex: "product_name",
-            },
-            {
-              title: "品牌",
-              dataIndex: "brand_name",
-            },
-            {
-              title: "口味",
-              dataIndex: "flavor_name",
-            },
-            {
-              title: "库存",
-              dataIndex: "stock_qty",
-            },
-            {
-              title: "更新时间",
-              dataIndex: "updated_at",
-              render: (value: string) => new Date(value).toLocaleString(),
-            },
-          ]}
+          columns={columns}
+          rowClassName={(record) => {
+            const level = getStockLevel(Number(record.stock_qty || 0));
+            if (level === "out") return "inventory-row-out";
+            if (level === "low") return "inventory-row-low";
+            return "";
+          }}
         />
       </Card>
+
+      <style jsx global>{`
+        .inventory-row-low td {
+          background-color: #fff7e6 !important;
+        }
+
+        .inventory-row-out td {
+          background-color: #fff1f0 !important;
+        }
+      `}</style>
     </DashboardShell>
   );
 }

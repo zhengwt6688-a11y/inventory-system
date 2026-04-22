@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card, Popconfirm, Space, Table, Tag, message } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Card, Popconfirm, Space, Table, Tag, message, Input } from "antd";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 
@@ -32,6 +32,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [rows, setRows] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
+  const [orderNoKeyword, setOrderNoKeyword] = useState("");
 
   async function loadOrders() {
     try {
@@ -75,6 +76,16 @@ export default function OrdersPage() {
     loadOrders();
   }, []);
 
+  const filteredRows = useMemo(() => {
+    const keyword = orderNoKeyword.trim().toLowerCase();
+
+    if (!keyword) return rows;
+
+    return rows.filter((item) =>
+      String(item.order_no || "").toLowerCase().includes(keyword)
+    );
+  }, [rows, orderNoKeyword]);
+
   return (
     <DashboardShell adminOnly>
       <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>订单列表</h1>
@@ -90,10 +101,32 @@ export default function OrdersPage() {
       </Card>
 
       <Card>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 600 }}>订单数据</div>
+
+          <div style={{ width: 320 }}>
+            <Input
+              placeholder="搜索订单号，例如 #59102"
+              value={orderNoKeyword}
+              onChange={(e) => setOrderNoKeyword(e.target.value)}
+              allowClear
+            />
+          </div>
+        </div>
+
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={rows}
+          dataSource={filteredRows}
           pagination={{ pageSize: 10 }}
           expandable={{
             expandedRowRender: (record) => (
@@ -134,7 +167,13 @@ export default function OrdersPage() {
               title: "客户信息",
               dataIndex: "customer_info",
               render: (value: string) => (
-                <div style={{ maxWidth: 260, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <div
+                  style={{
+                    maxWidth: 260,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
                   {value}
                 </div>
               ),
@@ -146,7 +185,11 @@ export default function OrdersPage() {
             },
             { title: "总数量", dataIndex: "total_qty" },
             { title: "创建人", dataIndex: "created_by" },
-            { title: "最后修改人", dataIndex: "updated_by", render: (v: string) => v || "-" },
+            {
+              title: "最后修改人",
+              dataIndex: "updated_by",
+              render: (v: string) => v || "-",
+            },
             {
               title: "创建时间",
               dataIndex: "created_at",

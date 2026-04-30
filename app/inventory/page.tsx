@@ -31,6 +31,8 @@ const BRAND_OPTIONS = [
   { label: "Alibarbar", value: "Alibarbar" },
   { label: "IGET ONE", value: "IGET ONE" },
   { label: "IGET BAR PRO", value: "IGET BAR PRO" },
+  { label: "国内Ali", value: "国内Ali" },
+  { label: "国内IGET ONE", value: "国内IGET ONE" },
 ];
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -47,7 +49,17 @@ export default function InventoryPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeBrandTab, setActiveBrandTab] = useState("ALL");
   const [searchText, setSearchText] = useState("");
+  const [role, setRole] = useState<"admin" | "user">("user");
   const [form] = Form.useForm();
+
+  async function loadMe() {
+    const res = await fetch("/api/me", { cache: "no-store" });
+    const data = await res.json();
+
+    if (res.ok) {
+      setRole(data.role || "user");
+    }
+  }
 
   async function loadInventory() {
     try {
@@ -111,8 +123,23 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
+    loadMe();
     loadInventory();
   }, []);
+
+  const visibleBrands = useMemo(() => {
+    return Array.from(new Set(rows.map((item) => item.brand_name))).filter(Boolean);
+  }, [rows]);
+
+  const tabItems = useMemo(() => {
+    return [
+      { key: "ALL", label: "全部" },
+      ...visibleBrands.map((brand) => ({
+        key: brand,
+        label: brand,
+      })),
+    ];
+  }, [visibleBrands]);
 
   const filteredRows = useMemo(() => {
     let result = [...rows];
@@ -153,14 +180,6 @@ export default function InventoryPage() {
   const outOfStockCount = filteredRows.filter(
     (item) => Number(item.stock_qty) <= 0
   ).length;
-
-  const tabItems = [
-    { key: "ALL", label: "全部" },
-    ...BRAND_OPTIONS.map((brand) => ({
-      key: brand.value,
-      label: brand.value,
-    })),
-  ];
 
   const columns: ColumnsType<InventoryItem> = [
     {
@@ -217,66 +236,70 @@ export default function InventoryPage() {
     },
   ];
 
+  const isAdmin = role === "admin";
+
   return (
     <DashboardShell>
       <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>
         库存管理
       </h1>
 
-      <Card style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, marginBottom: 16 }}>添加库存</h2>
+      {isAdmin ? (
+        <Card style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 20, marginBottom: 16 }}>添加库存</h2>
 
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleAdd}
-          initialValues={{ stock_qty: 0 }}
-        >
-          <Space align="start" size={16} wrap style={{ width: "100%" }}>
-            <Form.Item
-              label="产品"
-              name="product_name"
-              rules={[{ required: true, message: "请输入产品" }]}
-              style={{ width: 220 }}
-            >
-              <Input placeholder="例如：9000 / Ali-Cool Mint" />
-            </Form.Item>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleAdd}
+            initialValues={{ stock_qty: 0 }}
+          >
+            <Space align="start" size={16} wrap style={{ width: "100%" }}>
+              <Form.Item
+                label="产品"
+                name="product_name"
+                rules={[{ required: true, message: "请输入产品" }]}
+                style={{ width: 220 }}
+              >
+                <Input placeholder="例如：Ali-Grape Ice" />
+              </Form.Item>
 
-            <Form.Item
-              label="品牌"
-              name="brand_name"
-              rules={[{ required: true, message: "请选择品牌" }]}
-              style={{ width: 220 }}
-            >
-              <Select placeholder="请选择品牌" options={BRAND_OPTIONS} />
-            </Form.Item>
+              <Form.Item
+                label="品牌"
+                name="brand_name"
+                rules={[{ required: true, message: "请选择品牌" }]}
+                style={{ width: 220 }}
+              >
+                <Select placeholder="请选择品牌" options={BRAND_OPTIONS} />
+              </Form.Item>
 
-            <Form.Item
-              label="口味"
-              name="flavor_name"
-              rules={[{ required: true, message: "请输入口味" }]}
-              style={{ width: 220 }}
-            >
-              <Input placeholder="例如：Mango / Grape Ice" />
-            </Form.Item>
+              <Form.Item
+                label="口味"
+                name="flavor_name"
+                rules={[{ required: true, message: "请输入口味" }]}
+                style={{ width: 220 }}
+              >
+                <Input placeholder="例如：Grape Ice" />
+              </Form.Item>
 
-            <Form.Item
-              label="库存"
-              name="stock_qty"
-              rules={[{ required: true, message: "请输入库存" }]}
-              style={{ width: 160 }}
-            >
-              <InputNumber min={0} style={{ width: "100%" }} />
-            </Form.Item>
+              <Form.Item
+                label="库存"
+                name="stock_qty"
+                rules={[{ required: true, message: "请输入库存" }]}
+                style={{ width: 160 }}
+              >
+                <InputNumber min={0} style={{ width: "100%" }} />
+              </Form.Item>
 
-            <Form.Item label=" " style={{ width: 160 }}>
-              <Button type="primary" htmlType="submit" loading={submitting} block>
-                添加库存
-              </Button>
-            </Form.Item>
-          </Space>
-        </Form>
-      </Card>
+              <Form.Item label=" " style={{ width: 160 }}>
+                <Button type="primary" htmlType="submit" loading={submitting} block>
+                  添加库存
+                </Button>
+              </Form.Item>
+            </Space>
+          </Form>
+        </Card>
+      ) : null}
 
       <Card>
         <div
@@ -289,7 +312,9 @@ export default function InventoryPage() {
             flexWrap: "wrap",
           }}
         >
-          <h2 style={{ fontSize: 20, margin: 0 }}>库存列表</h2>
+          <h2 style={{ fontSize: 20, margin: 0 }}>
+            {isAdmin ? "库存列表" : "我的库存"}
+          </h2>
 
           <Space wrap>
             <Tag color="blue">记录数：{totalCount}</Tag>

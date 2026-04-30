@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentOperator, requireAdmin } from "@/lib/auth";
+import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
 
 export async function GET() {
   const operator = await getCurrentOperator();
@@ -9,37 +10,72 @@ export async function GET() {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select(`
-      id,
-      order_no,
-      customer_info,
-      remark,
-      created_by,
-      created_user_id,
-      updated_by,
-      updated_user_id,
-      updated_at,
-      total_qty,
-      created_at,
-      order_items (
+  try {
+    const access = await getAccessibleBrands(operator);
+
+    const { data, error } = await supabase
+      .from("orders")
+      .select(`
         id,
-        inventory_item_id,
-        product_name,
-        brand_name,
-        flavor_name,
-        qty,
-        created_at
-      )
-    `)
-    .order("created_at", { ascending: false });
+        order_no,
+        customer_info,
+        remark,
+        created_by,
+        created_user_id,
+        updated_by,
+        updated_user_id,
+        updated_at,
+        total_qty,
+        created_at,
+        order_items (
+          id,
+          inventory_item_id,
+          product_name,
+          brand_name,
+          flavor_name,
+          qty,
+          created_at
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (access.isAdmin) {
+      return NextResponse.json(data || []);
+    }
+
+    if (!access.brands.length) {
+      return NextResponse.json([]);
+    }
+
+    const filteredOrders = (data || [])
+      .map((order: any) => {
+        const visibleItems = filterOrderItemsByBrands(
+          order.order_items || [],
+          access.brands
+        );
+
+        return {
+          ...order,
+          order_items: visibleItems,
+          total_qty: visibleItems.reduce(
+            (sum: number, item: any) => sum + Number(item.qty || 0),
+            0
+          ),
+        };
+      })
+      .filter((order: any) => order.order_items.length > 0);
+
+    return NextResponse.json(filteredOrders);
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "读取订单失败" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json(data || []);
 }
 
 export async function POST(req: NextRequest) {
@@ -80,7 +116,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+          code: error.code ?? null,
+        },
+        { status: 500 }
+      );
     }
 
     await supabase

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { requireAdmin } from "@/lib/auth";
+import { getCurrentOperator, requireAdmin } from "@/lib/auth";
 
 export async function GET() {
-  const auth = await requireAdmin();
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const operator = await getCurrentOperator();
+
+  if (!operator) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
   const { data, error } = await supabase
@@ -43,6 +44,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
+
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -78,15 +80,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      return NextResponse.json(
-        {
-          error: error.message,
-          details: error.details ?? null,
-          hint: error.hint ?? null,
-          code: error.code ?? null,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     await supabase

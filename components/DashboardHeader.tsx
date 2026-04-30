@@ -1,7 +1,6 @@
 "use client";
 
 import { Button, Space, message } from "antd";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 export default function DashboardHeader({
@@ -12,7 +11,6 @@ export default function DashboardHeader({
   role: "admin" | "user";
 }) {
   const supabase = createClient();
-  const router = useRouter();
 
   async function handleLogout() {
     try {
@@ -47,7 +45,8 @@ export default function DashboardHeader({
 
       <Space>
         <Button href="/inventory">库存</Button>
-        {role === "admin" ? <Button href="/orders">订单</Button> : null}
+        <Button href="/orders">订单</Button>
+        {role === "admin" ? <Button href="/users">用户管理</Button> : null}
         <Button danger onClick={handleLogout}>
           退出登录
         </Button>

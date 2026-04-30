@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { requireAdmin } from "@/lib/auth";
+import { getCurrentOperator, requireAdmin } from "@/lib/auth";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
 export async function GET(_: NextRequest, { params }: Params) {
-  const auth = await requireAdmin();
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const operator = await getCurrentOperator();
+
+  if (!operator) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -55,6 +56,7 @@ export async function GET(_: NextRequest, { params }: Params) {
 
 export async function PUT(req: NextRequest, { params }: Params) {
   const auth = await requireAdmin();
+
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -75,18 +77,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const remark = String(body.remark || "").trim();
     const items = Array.isArray(body.items) ? body.items : [];
 
-    if (!order_no) {
-      return NextResponse.json({ error: "订单号不能为空" }, { status: 400 });
-    }
-
-    if (!customer_info) {
-      return NextResponse.json({ error: "客户信息不能为空" }, { status: 400 });
-    }
-
-    if (!items.length) {
-      return NextResponse.json({ error: "请至少添加一个商品" }, { status: 400 });
-    }
-
     const { data, error } = await supabase.rpc("update_order_with_inventory_items", {
       p_order_id: orderId,
       p_order_no: order_no,
@@ -97,15 +87,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
 
     if (error) {
-      return NextResponse.json(
-        {
-          error: error.message,
-          details: error.details ?? null,
-          hint: error.hint ?? null,
-          code: error.code ?? null,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     await supabase
@@ -127,11 +109,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_: NextRequest, { params }: Params) {
   const auth = await requireAdmin();
+
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const operator = auth.operator;
   const { id } = await params;
   const orderId = Number(id);
 
@@ -144,18 +126,10 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   });
 
   if (error) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        details: error.details ?? null,
-        hint: error.hint ?? null,
-        code: error.code ?? null,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({
-    message: `订单已删除，库存已回滚，操作人：${operator.displayName}`,
+    message: "订单已删除，库存已回滚",
   });
 }

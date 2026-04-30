@@ -33,6 +33,19 @@ export default function OrdersPage() {
   const [rows, setRows] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [orderNoKeyword, setOrderNoKeyword] = useState("");
+  const [role, setRole] = useState<"admin" | "user">("user");
+
+  async function loadMe() {
+    const res = await fetch("/api/me", { cache: "no-store" });
+    const data = await res.json();
+
+    if (!res.ok) {
+      router.replace("/login");
+      return;
+    }
+
+    setRole(data.role || "user");
+  }
 
   async function loadOrders() {
     try {
@@ -42,7 +55,6 @@ export default function OrdersPage() {
 
       if (!res.ok) {
         if (res.status === 401) router.replace("/login");
-        if (res.status === 403) router.replace("/inventory");
         return;
       }
 
@@ -73,6 +85,7 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
+    loadMe();
     loadOrders();
   }, []);
 
@@ -86,17 +99,25 @@ export default function OrdersPage() {
     );
   }, [rows, orderNoKeyword]);
 
+  const isAdmin = role === "admin";
+
   return (
-    <DashboardShell adminOnly>
+    <DashboardShell>
       <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>订单列表</h1>
 
       <Card style={{ marginBottom: 24 }}>
         <Space wrap>
-          <Button type="primary" href="/orders/new">
-            添加订单
-          </Button>
-          <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
-          <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
+          {isAdmin ? (
+            <>
+              <Button type="primary" href="/orders/new">
+                添加订单
+              </Button>
+              <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
+              <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
+            </>
+          ) : (
+            <Tag color="blue">当前为查看权限</Tag>
+          )}
         </Space>
       </Card>
 
@@ -202,24 +223,27 @@ export default function OrdersPage() {
             },
             {
               title: "操作",
-              render: (_, record) => (
-                <Space>
-                  <Button type="link" href={`/orders/${record.id}/edit`}>
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="确认删除这个订单吗？"
-                    description="删除后会自动把库存加回去"
-                    onConfirm={() => handleDelete(record.id)}
-                    okText="确认"
-                    cancelText="取消"
-                  >
-                    <Button type="link" danger>
-                      删除
+              render: (_, record) =>
+                isAdmin ? (
+                  <Space>
+                    <Button type="link" href={`/orders/${record.id}/edit`}>
+                      编辑
                     </Button>
-                  </Popconfirm>
-                </Space>
-              ),
+                    <Popconfirm
+                      title="确认删除这个订单吗？"
+                      description="删除后会自动把库存加回去"
+                      onConfirm={() => handleDelete(record.id)}
+                      okText="确认"
+                      cancelText="取消"
+                    >
+                      <Button type="link" danger>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ) : (
+                  <span style={{ color: "#999" }}>仅查看</span>
+                ),
             },
           ]}
         />

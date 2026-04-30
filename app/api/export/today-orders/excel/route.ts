@@ -1,74 +1,32 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import ExcelJS from "exceljs";
+import { getCurrentOperator } from "@/lib/auth";
+import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
+import * as XLSX from "xlsx";
 
-type OrderItem = {
-  id: number;
-  product_name: string;
-  brand_name: string;
-  flavor_name: string;
-  qty: number;
-};
-
-type OrderRow = {
-  id: number;
-  order_no: string;
-  customer_info: string;
-  remark?: string;
-  created_by?: string;
-  total_qty: number;
-  created_at: string;
-  order_items: OrderItem[];
-};
-
-// 品牌名称映射：你可以以后继续加
-function normalizeBrandName(brandName: string) {
-  const name = String(brandName || "").trim().toLowerCase();
-
-  const brandMap: Record<string, string> = {
-    alibarbar: "ali",
-    "iget one": "one",
-    igetone: "one",
-    one: "one",
-  };
-
-  return brandMap[name] || name;
-}
-
-// 把订单明细整理成你要的“产品信息”格式
-function formatProductInfo(items: OrderItem[]) {
-  const grouped = new Map<string, string[]>();
+function formatProductInfo(items: any[]) {
+  const grouped: Record<string, string[]> = {};
 
   for (const item of items || []) {
-    const brand = normalizeBrandName(item.brand_name);
-    const flavorLine = `${item.flavor_name}*${item.qty}`;
-
-    if (!grouped.has(brand)) {
-      grouped.set(brand, []);
-    }
-
-    grouped.get(brand)!.push(flavorLine);
+    const brand = item.brand_name || "未知品牌";
+    if (!grouped[brand]) grouped[brand] = [];
+    grouped[brand].push(`${item.flavor_name}*${item.qty}`);
   }
 
-  const lines: string[] = [];
-
-  for (const [brand, flavors] of grouped.entries()) {
-    lines.push(`${brand}:`);
-    lines.push(...flavors);
-  }
-
-  return lines.join("\n");
-}
-
-// 时间格式：导出成 4月11日 这种样式
-function formatDateToChinese(dateString: string) {
-  const date = new Date(dateString);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  return `${month}月${day}日`;
+  return Object.entries(grouped)
+    .map(([brand, lines]) => `${brand}:\n${lines.join("\n")}`)
+    .join("\n");
 }
 
 export async function GET() {
+  const operator = await getCurrentOperator();
+
+  if (!operator) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
+  const access = await getAccessibleBrands(operator);
+
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
@@ -82,7 +40,6 @@ export async function GET() {
       order_no,
       customer_info,
       remark,
-      created_by,
       total_qty,
       created_at,
       order_items (
@@ -95,75 +52,59 @@ export async function GET() {
     `)
     .gte("created_at", start.toISOString())
     .lte("created_at", end.toISOString())
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("当天订单");
+  const visibleOrders = access.isAdmin
+    ? data || []
+    : (data || [])
+        .map((order: any) => {
+          const visibleItems = filterOrderItemsByBrands(
+            order.order_items || [],
+            access.brands
+          );
 
-  worksheet.columns = [
-    { header: "A (时间)", key: "time", width: 14 },
-    { header: "B (订单编号)", key: "order_no", width: 18 },
-    { header: "C (客户信息)", key: "customer_info", width: 34 },
-    { header: "D (产品信息)", key: "product_info", width: 42 },
-    { header: "E (数量)", key: "total_qty", width: 10 },
-    { header: "F (备注)", key: "remark", width: 24 },
+          return {
+            ...order,
+            order_items: visibleItems,
+            total_qty: visibleItems.reduce(
+              (sum: number, item: any) => sum + Number(item.qty || 0),
+              0
+            ),
+          };
+        })
+        .filter((order: any) => order.order_items.length > 0);
+
+  const sheetData = visibleOrders.map((order: any) => ({
+    时间: new Date(order.created_at).toLocaleDateString("zh-CN"),
+    订单编号: order.order_no,
+    客户信息: order.customer_info,
+    产品信息: formatProductInfo(order.order_items || []),
+    数量: order.total_qty,
+    备注: order.remark || "",
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(sheetData);
+
+  worksheet["!cols"] = [
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 36 },
+    { wch: 40 },
+    { wch: 10 },
+    { wch: 28 },
   ];
 
-  for (const order of (data || []) as OrderRow[]) {
-    worksheet.addRow({
-      time: formatDateToChinese(order.created_at),
-      order_no: order.order_no,
-      customer_info: order.customer_info || "",
-      product_info: formatProductInfo(order.order_items || []),
-      total_qty: order.total_qty ?? 0,
-      remark: order.remark || "",
-    });
-  }
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Today Orders");
 
-  // 表头样式
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.alignment = { vertical: "middle", horizontal: "center" };
-
-  // 全表自动换行、垂直居中
-  worksheet.eachRow((row, rowNumber) => {
-    row.alignment = {
-      vertical: "middle",
-      wrapText: true,
-    };
-
-    // 数据行根据内容自动给高一点
-    if (rowNumber > 1) {
-      row.height = 42;
-    }
+  const buffer = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
   });
-
-  // 指定几列居中
-  ["A", "B", "E"].forEach((col) => {
-    worksheet.getColumn(col).alignment = {
-      vertical: "middle",
-      horizontal: "center",
-      wrapText: true,
-    };
-  });
-
-  // 边框
-  worksheet.eachRow((row) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFBFBFBF" } },
-        left: { style: "thin", color: { argb: "FFBFBFBF" } },
-        bottom: { style: "thin", color: { argb: "FFBFBFBF" } },
-        right: { style: "thin", color: { argb: "FFBFBFBF" } },
-      };
-    });
-  });
-
-  const buffer = await workbook.xlsx.writeBuffer();
 
   return new NextResponse(buffer, {
     headers: {

@@ -108,16 +108,15 @@ export default function OrdersPage() {
       <Card style={{ marginBottom: 24 }}>
         <Space wrap>
           {isAdmin ? (
-            <>
-              <Button type="primary" href="/orders/new">
-                添加订单
-              </Button>
-              <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
-              <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
-            </>
+            <Button type="primary" href="/orders/new">
+              添加订单
+            </Button>
           ) : (
-            <Tag color="blue">当前为查看权限</Tag>
+            <Tag color="blue">当前为供应商查看权限</Tag>
           )}
+          
+          <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
+          <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
         </Space>
       </Card>
 

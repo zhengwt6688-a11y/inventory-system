@@ -1,7 +1,36 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getCurrentOperator } from "@/lib/auth";
+import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
+
+function formatProductInfo(items: any[]) {
+  const grouped: Record<string, string[]> = {};
+
+  for (const item of items || []) {
+    const brand = item.brand_name || "未知品牌";
+    if (!grouped[brand]) grouped[brand] = [];
+    grouped[brand].push(`${item.flavor_name}*${item.qty}`);
+  }
+
+  return Object.entries(grouped)
+    .map(([brand, lines]) => `${brand}:\n${lines.join("\n")}`)
+    .join("\n");
+}
+
+function csvEscape(value: any) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
 
 export async function GET() {
+  const operator = await getCurrentOperator();
+
+  if (!operator) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
+  const access = await getAccessibleBrands(operator);
+
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
@@ -15,7 +44,6 @@ export async function GET() {
       order_no,
       customer_info,
       remark,
-      created_by,
       total_qty,
       created_at,
       order_items (
@@ -34,59 +62,43 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows: string[] = [];
+  const visibleOrders = access.isAdmin
+    ? data || []
+    : (data || [])
+        .map((order: any) => {
+          const visibleItems = filterOrderItemsByBrands(
+            order.order_items || [],
+            access.brands
+          );
 
-  rows.push([
-    "订单号",
-    "客户信息",
-    "备注",
-    "录入人",
-    "总数",
-    "创建时间",
-    "产品",
-    "品牌",
-    "口味",
-    "数量",
-  ].join(","));
+          return {
+            ...order,
+            order_items: visibleItems,
+            total_qty: visibleItems.reduce(
+              (sum: number, item: any) => sum + Number(item.qty || 0),
+              0
+            ),
+          };
+        })
+        .filter((order: any) => order.order_items.length > 0);
 
-  for (const order of data || []) {
-    const items = order.order_items || [];
+  const headers = ["时间", "订单编号", "客户信息", "产品信息", "数量", "备注"];
 
-    if (!items.length) {
-      rows.push([
-        order.order_no,
-        order.customer_info || "",
-        order.remark || "",
-        order.created_by || "",
-        String(order.total_qty ?? 0),
-        order.created_at || "",
-        "",
-        "",
-        "",
-        "",
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
-      continue;
-    }
+  const rows = visibleOrders.map((order: any) => [
+    new Date(order.created_at).toLocaleDateString("zh-CN"),
+    order.order_no,
+    order.customer_info,
+    formatProductInfo(order.order_items || []),
+    order.total_qty,
+    order.remark || "",
+  ]);
 
-    for (const item of items) {
-      rows.push([
-        order.order_no,
-        order.customer_info || "",
-        order.remark || "",
-        order.created_by || "",
-        String(order.total_qty ?? 0),
-        order.created_at || "",
-        item.product_name || "",
-        item.brand_name || "",
-        item.flavor_name || "",
-        String(item.qty ?? 0),
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
-    }
-  }
+  const csv = [
+    headers.map(csvEscape).join(","),
+    ...rows.map((row) => row.map(csvEscape).join(",")),
+  ].join("\n");
 
-  const csvContent = "\uFEFF" + rows.join("\n");
-
-  return new NextResponse(csvContent, {
+  return new NextResponse("\uFEFF" + csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="today-orders.csv"`,

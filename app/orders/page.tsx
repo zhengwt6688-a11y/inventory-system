@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Popconfirm, Space, Table, Tag, message, Input } from "antd";
+import {
+  Button,
+  Card,
+  Popconfirm,
+  Space,
+  Table,
+  Tag,
+  message,
+  Input,
+  DatePicker,
+} from "antd";
+import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 
@@ -34,6 +45,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(false);
   const [orderNoKeyword, setOrderNoKeyword] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
+  const [exportDate, setExportDate] = useState(dayjs());
 
   async function loadMe() {
     const res = await fetch("/api/me", { cache: "no-store" });
@@ -100,10 +112,13 @@ export default function OrdersPage() {
   }, [rows, orderNoKeyword]);
 
   const isAdmin = role === "admin";
+  const selectedDate = exportDate.format("YYYY-MM-DD");
 
   return (
     <DashboardShell>
-      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>订单列表</h1>
+      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>
+        订单列表
+      </h1>
 
       <Card style={{ marginBottom: 24 }}>
         <Space wrap>
@@ -114,9 +129,20 @@ export default function OrdersPage() {
           ) : (
             <Tag color="blue">当前为供应商查看权限</Tag>
           )}
-          
-          <Button href="/api/export/today-orders/csv">导出当天 CSV</Button>
-          <Button href="/api/export/today-orders/excel">导出当天 Excel</Button>
+
+          <DatePicker
+            value={exportDate}
+            onChange={(value) => setExportDate(value || dayjs())}
+            allowClear={false}
+          />
+
+          <Button href={`/api/export/today-orders/csv?date=${selectedDate}`}>
+            导出所选日期 CSV
+          </Button>
+
+          <Button href={`/api/export/today-orders/excel?date=${selectedDate}`}>
+            导出所选日期 Excel
+          </Button>
         </Space>
       </Card>
 
@@ -201,7 +227,9 @@ export default function OrdersPage() {
             {
               title: "商品数",
               dataIndex: "order_items",
-              render: (items: OrderItem[]) => <Tag>{items?.length || 0} 个商品</Tag>,
+              render: (items: OrderItem[]) => (
+                <Tag>{items?.length || 0} 个商品</Tag>
+              ),
             },
             { title: "总数量", dataIndex: "total_qty" },
             { title: "创建人", dataIndex: "created_by" },
@@ -218,7 +246,8 @@ export default function OrdersPage() {
             {
               title: "修改时间",
               dataIndex: "updated_at",
-              render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
+              render: (value: string) =>
+                value ? new Date(value).toLocaleString() : "-",
             },
             {
               title: "操作",

@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentOperator } from "@/lib/auth";
-import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
+import {
+  getAccessibleBrands,
+  filterOrderItemsByBrands,
+} from "@/lib/brandAccess";
 
 function formatProductInfo(items: any[]) {
   const grouped: Record<string, string[]> = {};
@@ -22,20 +25,29 @@ function csvEscape(value: any) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export async function GET() {
+function getDateRange(dateStr: string | null) {
+  const target = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+
+  const start = new Date(target);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(target);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end, dateLabel: start.toISOString().slice(0, 10) };
+}
+
+export async function GET(req: NextRequest) {
   const operator = await getCurrentOperator();
 
   if (!operator) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
+  const date = req.nextUrl.searchParams.get("date");
+  const { start, end, dateLabel } = getDateRange(date);
+
   const access = await getAccessibleBrands(operator);
-
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
 
   const { data, error } = await supabase
     .from("orders")
@@ -101,7 +113,7 @@ export async function GET() {
   return new NextResponse("\uFEFF" + csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="today-orders.csv"`,
+      "Content-Disposition": `attachment; filename="orders-${dateLabel}.csv"`,
     },
   });
 }

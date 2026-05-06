@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentOperator } from "@/lib/auth";
-import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
+import {
+  getAccessibleBrands,
+  filterOrderItemsByBrands,
+} from "@/lib/brandAccess";
 import * as XLSX from "xlsx";
 
 function formatProductInfo(items: any[]) {
@@ -18,20 +21,29 @@ function formatProductInfo(items: any[]) {
     .join("\n");
 }
 
-export async function GET() {
+function getDateRange(dateStr: string | null) {
+  const target = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+
+  const start = new Date(target);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(target);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end, dateLabel: start.toISOString().slice(0, 10) };
+}
+
+export async function GET(req: NextRequest) {
   const operator = await getCurrentOperator();
 
   if (!operator) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
+  const date = req.nextUrl.searchParams.get("date");
+  const { start, end, dateLabel } = getDateRange(date);
+
   const access = await getAccessibleBrands(operator);
-
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
 
   const { data, error } = await supabase
     .from("orders")
@@ -99,7 +111,7 @@ export async function GET() {
     { wch: 28 },
   ];
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Today Orders");
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
 
   const buffer = XLSX.write(workbook, {
     type: "buffer",
@@ -110,7 +122,7 @@ export async function GET() {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="today-orders.xlsx"`,
+      "Content-Disposition": `attachment; filename="orders-${dateLabel}.xlsx"`,
     },
   });
 }

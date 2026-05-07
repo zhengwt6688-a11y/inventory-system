@@ -11,6 +11,8 @@ import {
   message,
   Input,
   DatePicker,
+  Modal,
+  Form,
 } from "antd";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -38,6 +40,8 @@ type Order = {
   total_qty: number;
   created_at: string;
   updated_at?: string;
+  tracking_no?: string;
+  status?: "processing" | "completed";
   order_items: OrderItem[];
 };
 
@@ -51,6 +55,10 @@ export default function OrdersPage() {
     dayjs(),
     dayjs(),
   ]);
+
+  const [trackingOpen, setTrackingOpen] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [trackingForm] = Form.useForm();
 
   async function loadMe() {
     const res = await fetch("/api/me", { cache: "no-store" });
@@ -101,6 +109,41 @@ export default function OrdersPage() {
     }
   }
 
+  function openTrackingModal(order: Order) {
+    setCurrentOrder(order);
+    trackingForm.setFieldsValue({
+      tracking_no: order.tracking_no || "",
+    });
+    setTrackingOpen(true);
+  }
+
+  async function handleSaveTracking(values: { tracking_no: string }) {
+    if (!currentOrder) return;
+
+    const res = await fetch(`/api/orders/${currentOrder.id}/tracking`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tracking_no: values.tracking_no || "",
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      message.error(data.error || "保存失败");
+      return;
+    }
+
+    message.success(data.message || "保存成功");
+    setTrackingOpen(false);
+    setCurrentOrder(null);
+    trackingForm.resetFields();
+    loadOrders();
+  }
+
   useEffect(() => {
     loadMe();
     loadOrders();
@@ -133,7 +176,7 @@ export default function OrdersPage() {
               添加订单
             </Button>
           ) : (
-            <Tag color="blue">当前为供应商查看权限</Tag>
+            <Tag color="blue">当前为供应商权限</Tag>
           )}
 
           <RangePicker
@@ -221,7 +264,25 @@ export default function OrdersPage() {
             ),
           }}
           columns={[
-            { title: "订单号", dataIndex: "order_no" },
+            {
+              title: "订单号",
+              dataIndex: "order_no",
+            },
+            {
+              title: "状态",
+              dataIndex: "status",
+              render: (_, record) =>
+                record.tracking_no ? (
+                  <Tag color="green">已完成</Tag>
+                ) : (
+                  <Tag color="orange">处理中</Tag>
+                ),
+            },
+            {
+              title: "追踪号",
+              dataIndex: "tracking_no",
+              render: (value: string) => value || "-",
+            },
             {
               title: "客户信息",
               dataIndex: "customer_info",
@@ -244,8 +305,14 @@ export default function OrdersPage() {
                 <Tag>{items?.length || 0} 个商品</Tag>
               ),
             },
-            { title: "总数量", dataIndex: "total_qty" },
-            { title: "创建人", dataIndex: "created_by" },
+            {
+              title: "总数量",
+              dataIndex: "total_qty",
+            },
+            {
+              title: "创建人",
+              dataIndex: "created_by",
+            },
             {
               title: "最后修改人",
               dataIndex: "updated_by",
@@ -264,31 +331,67 @@ export default function OrdersPage() {
             },
             {
               title: "操作",
-              render: (_, record) =>
-                isAdmin ? (
-                  <Space>
-                    <Button type="link" href={`/orders/${record.id}/edit`}>
-                      编辑
-                    </Button>
-                    <Popconfirm
-                      title="确认删除这个订单吗？"
-                      description="删除后会自动把库存加回去"
-                      onConfirm={() => handleDelete(record.id)}
-                      okText="确认"
-                      cancelText="取消"
-                    >
-                      <Button type="link" danger>
-                        删除
+              render: (_, record) => (
+                <Space>
+                  <Button type="link" onClick={() => openTrackingModal(record)}>
+                    {record.tracking_no ? "编辑追踪号" : "上传追踪号"}
+                  </Button>
+
+                  {isAdmin ? (
+                    <>
+                      <Button type="link" href={`/orders/${record.id}/edit`}>
+                        编辑
                       </Button>
-                    </Popconfirm>
-                  </Space>
-                ) : (
-                  <span style={{ color: "#999" }}>仅查看</span>
-                ),
+
+                      <Popconfirm
+                        title="确认删除这个订单吗？"
+                        description="删除后会自动把库存加回去"
+                        onConfirm={() => handleDelete(record.id)}
+                        okText="确认"
+                        cancelText="取消"
+                      >
+                        <Button type="link" danger>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  ) : null}
+                </Space>
+              ),
             },
           ]}
         />
       </Card>
+
+      <Modal
+        title={currentOrder?.tracking_no ? "编辑追踪号" : "上传追踪号"}
+        open={trackingOpen}
+        onCancel={() => {
+          setTrackingOpen(false);
+          setCurrentOrder(null);
+          trackingForm.resetFields();
+        }}
+        footer={null}
+        destroyOnHidden
+      >
+        <Form form={trackingForm} layout="vertical" onFinish={handleSaveTracking}>
+          <Form.Item label="订单号">
+            <Input value={currentOrder?.order_no || ""} disabled />
+          </Form.Item>
+
+          <Form.Item
+            label="追踪号"
+            name="tracking_no"
+            extra="如果追踪号填错，可以再次打开编辑修改。清空追踪号后订单会恢复为处理中。"
+          >
+            <Input.TextArea rows={3} placeholder="请输入物流追踪号" />
+          </Form.Item>
+
+          <Button type="primary" htmlType="submit" block>
+            保存追踪号
+          </Button>
+        </Form>
+      </Modal>
     </DashboardShell>
   );
 }

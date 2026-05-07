@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentOperator, requireAdmin } from "@/lib/auth";
-import { getAccessibleBrands, filterOrderItemsByBrands } from "@/lib/brandAccess";
+import {
+  getAccessibleBrands,
+  filterOrderItemsByBrands,
+} from "@/lib/brandAccess";
 
 export async function GET() {
   const operator = await getCurrentOperator();
@@ -27,6 +30,8 @@ export async function GET() {
         updated_at,
         total_qty,
         created_at,
+        tracking_no,
+        status,
         order_items (
           id,
           inventory_item_id,

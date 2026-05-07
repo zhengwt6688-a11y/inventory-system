@@ -16,6 +16,8 @@ import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 
+const { RangePicker } = DatePicker;
+
 type OrderItem = {
   id: number;
   inventory_item_id: number;
@@ -45,7 +47,10 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(false);
   const [orderNoKeyword, setOrderNoKeyword] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
-  const [exportDate, setExportDate] = useState(dayjs());
+  const [exportRange, setExportRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+    dayjs(),
+    dayjs(),
+  ]);
 
   async function loadMe() {
     const res = await fetch("/api/me", { cache: "no-store" });
@@ -112,7 +117,8 @@ export default function OrdersPage() {
   }, [rows, orderNoKeyword]);
 
   const isAdmin = role === "admin";
-  const selectedDate = exportDate.format("YYYY-MM-DD");
+  const startDate = exportRange[0].format("YYYY-MM-DD");
+  const endDate = exportRange[1].format("YYYY-MM-DD");
 
   return (
     <DashboardShell>
@@ -130,18 +136,25 @@ export default function OrdersPage() {
             <Tag color="blue">当前为供应商查看权限</Tag>
           )}
 
-          <DatePicker
-            value={exportDate}
-            onChange={(value) => setExportDate(value || dayjs())}
+          <RangePicker
+            value={exportRange}
             allowClear={false}
+            onChange={(values) => {
+              if (!values || !values[0] || !values[1]) return;
+              setExportRange([values[0], values[1]]);
+            }}
           />
 
-          <Button href={`/api/export/today-orders/csv?date=${selectedDate}`}>
-            导出所选日期 CSV
+          <Button
+            href={`/api/export/today-orders/csv?start=${startDate}&end=${endDate}`}
+          >
+            导出区间 CSV
           </Button>
 
-          <Button href={`/api/export/today-orders/excel?date=${selectedDate}`}>
-            导出所选日期 Excel
+          <Button
+            href={`/api/export/today-orders/excel?start=${startDate}&end=${endDate}`}
+          >
+            导出区间 Excel
           </Button>
         </Space>
       </Card>

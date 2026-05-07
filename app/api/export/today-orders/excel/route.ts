@@ -21,16 +21,20 @@ function formatProductInfo(items: any[]) {
     .join("\n");
 }
 
-function getDateRange(dateStr: string | null) {
-  const target = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+function getDateRange(startStr: string | null, endStr: string | null) {
+  const startTarget = startStr ? new Date(`${startStr}T00:00:00`) : new Date();
+  const endTarget = endStr ? new Date(`${endStr}T00:00:00`) : startTarget;
 
-  const start = new Date(target);
+  const start = new Date(startTarget);
   start.setHours(0, 0, 0, 0);
 
-  const end = new Date(target);
+  const end = new Date(endTarget);
   end.setHours(23, 59, 59, 999);
 
-  return { start, end, dateLabel: start.toISOString().slice(0, 10) };
+  const startLabel = start.toISOString().slice(0, 10);
+  const endLabel = end.toISOString().slice(0, 10);
+
+  return { start, end, startLabel, endLabel };
 }
 
 export async function GET(req: NextRequest) {
@@ -40,8 +44,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
-  const date = req.nextUrl.searchParams.get("date");
-  const { start, end, dateLabel } = getDateRange(date);
+  const startParam = req.nextUrl.searchParams.get("start");
+  const endParam = req.nextUrl.searchParams.get("end");
+  const { start, end, startLabel, endLabel } = getDateRange(
+    startParam,
+    endParam
+  );
 
   const access = await getAccessibleBrands(operator);
 
@@ -122,7 +130,7 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="orders-${dateLabel}.xlsx"`,
+      "Content-Disposition": `attachment; filename="orders-${startLabel}-to-${endLabel}.xlsx"`,
     },
   });
 }

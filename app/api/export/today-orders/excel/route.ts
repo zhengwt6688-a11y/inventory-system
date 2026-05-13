@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
       remark,
       total_qty,
       created_at,
+      tracking_no,
+      status,
       order_items (
         id,
         product_name,
@@ -104,6 +106,8 @@ export async function GET(req: NextRequest) {
     客户信息: order.customer_info,
     产品信息: formatProductInfo(order.order_items || []),
     数量: order.total_qty,
+    状态: order.tracking_no ? "已完成" : "处理中",
+    追踪号: order.tracking_no || "",
     备注: order.remark || "",
   }));
 
@@ -116,6 +120,8 @@ export async function GET(req: NextRequest) {
     { wch: 36 },
     { wch: 40 },
     { wch: 10 },
+    { wch: 12 },
+    { wch: 30 },
     { wch: 28 },
   ];
 

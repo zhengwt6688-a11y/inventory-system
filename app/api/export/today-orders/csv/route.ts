@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
       remark,
       total_qty,
       created_at,
+      tracking_no,
+      status,
       order_items (
         id,
         product_name,
@@ -102,7 +104,16 @@ export async function GET(req: NextRequest) {
         })
         .filter((order: any) => order.order_items.length > 0);
 
-  const headers = ["时间", "订单编号", "客户信息", "产品信息", "数量", "备注"];
+  const headers = [
+    "时间",
+    "订单编号",
+    "客户信息",
+    "产品信息",
+    "数量",
+    "状态",
+    "追踪号",
+    "备注",
+  ];
 
   const rows = visibleOrders.map((order: any) => [
     new Date(order.created_at).toLocaleDateString("zh-CN"),
@@ -110,6 +121,8 @@ export async function GET(req: NextRequest) {
     order.customer_info,
     formatProductInfo(order.order_items || []),
     order.total_qty,
+    order.tracking_no ? "已完成" : "处理中",
+    order.tracking_no || "",
     order.remark || "",
   ]);
 

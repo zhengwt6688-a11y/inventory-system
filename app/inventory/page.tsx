@@ -34,6 +34,7 @@ const BRAND_OPTIONS = [
   { label: "国内Ali", value: "国内Ali" },
   { label: "国内IGET ONE", value: "国内IGET ONE" },
   { label: "Alfakher", value: "Alfakher" },
+  { label: "Uwin", value: "Uwin" },
 ];
 
 const LOW_STOCK_THRESHOLD = 5;

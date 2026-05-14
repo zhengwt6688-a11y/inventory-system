@@ -13,6 +13,7 @@ import {
   DatePicker,
   Modal,
   Form,
+  Select,
 } from "antd";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -45,11 +46,19 @@ type Order = {
   order_items: OrderItem[];
 };
 
+type SupplierBrandAccess = {
+  id: number;
+  username: string;
+  brand_name: string;
+};
+
 export default function OrdersPage() {
   const router = useRouter();
   const [rows, setRows] = useState<Order[]>([]);
+  const [supplierAccessRows, setSupplierAccessRows] = useState<SupplierBrandAccess[]>([]);
   const [loading, setLoading] = useState(false);
   const [orderNoKeyword, setOrderNoKeyword] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<string>("ALL");
   const [role, setRole] = useState<"admin" | "user">("user");
   const [exportRange, setExportRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs(),
@@ -70,6 +79,19 @@ export default function OrdersPage() {
     }
 
     setRole(data.role || "user");
+
+    if (data.role === "admin") {
+      loadSupplierAccess();
+    }
+  }
+
+  async function loadSupplierAccess() {
+    const res = await fetch("/api/supplier-brand-access", { cache: "no-store" });
+    const data = await res.json();
+
+    if (!res.ok) return;
+
+    setSupplierAccessRows(data || []);
   }
 
   async function loadOrders() {
@@ -149,15 +171,54 @@ export default function OrdersPage() {
     loadOrders();
   }, []);
 
+  const supplierOptions = useMemo(() => {
+    const suppliers = Array.from(
+      new Set(supplierAccessRows.map((item) => item.username))
+    ).filter(Boolean);
+
+    return [
+      { label: "全部供应商", value: "ALL" },
+      ...suppliers.map((supplier) => ({
+        label: supplier,
+        value: supplier,
+      })),
+    ];
+  }, [supplierAccessRows]);
+
+  const supplierBrandMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+
+    for (const item of supplierAccessRows) {
+      if (!map[item.username]) map[item.username] = [];
+      map[item.username].push(item.brand_name);
+    }
+
+    return map;
+  }, [supplierAccessRows]);
+
   const filteredRows = useMemo(() => {
+    let result = [...rows];
+
     const keyword = orderNoKeyword.trim().toLowerCase();
 
-    if (!keyword) return rows;
+    if (keyword) {
+      result = result.filter((item) =>
+        String(item.order_no || "").toLowerCase().includes(keyword)
+      );
+    }
 
-    return rows.filter((item) =>
-      String(item.order_no || "").toLowerCase().includes(keyword)
-    );
-  }, [rows, orderNoKeyword]);
+    if (role === "admin" && selectedSupplier !== "ALL") {
+      const supplierBrands = supplierBrandMap[selectedSupplier] || [];
+
+      result = result.filter((order) =>
+        (order.order_items || []).some((item) =>
+          supplierBrands.includes(item.brand_name)
+        )
+      );
+    }
+
+    return result;
+  }, [rows, orderNoKeyword, selectedSupplier, supplierBrandMap, role]);
 
   const isAdmin = role === "admin";
   const startDate = exportRange[0].format("YYYY-MM-DD");
@@ -213,16 +274,32 @@ export default function OrdersPage() {
             marginBottom: 16,
           }}
         >
-          <div style={{ fontSize: 20, fontWeight: 600 }}>订单数据</div>
+          <div style={{ fontSize: 20, fontWeight: 600 }}>
+            订单数据
+            <Tag color="blue" style={{ marginLeft: 12 }}>
+              共 {filteredRows.length} 单
+            </Tag>
+          </div>
 
-          <div style={{ width: 320 }}>
+          <Space wrap>
+            {isAdmin ? (
+              <Select
+                style={{ width: 220 }}
+                value={selectedSupplier}
+                options={supplierOptions}
+                onChange={setSelectedSupplier}
+                placeholder="筛选供应商"
+              />
+            ) : null}
+
             <Input
+              style={{ width: 320 }}
               placeholder="搜索订单号，例如 #59102"
               value={orderNoKeyword}
               onChange={(e) => setOrderNoKeyword(e.target.value)}
               allowClear
             />
-          </div>
+          </Space>
         </div>
 
         <Table

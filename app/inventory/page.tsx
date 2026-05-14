@@ -33,6 +33,7 @@ const BRAND_OPTIONS = [
   { label: "IGET BAR PRO", value: "IGET BAR PRO" },
   { label: "国内Ali", value: "国内Ali" },
   { label: "国内IGET ONE", value: "国内IGET ONE" },
+  { label: "国内IGET BAR PRO", value: "国内IGET BAR PRO" },
   { label: "Alfakher", value: "Alfakher" },
   { label: "Uwin", value: "Uwin" },
 ];

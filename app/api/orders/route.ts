@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getCurrentOperator, requireAdmin } from "@/lib/auth";
+import { getCurrentOperator } from "@/lib/auth";
 import {
   getAccessibleBrands,
   filterOrderItemsByBrands,
@@ -84,13 +84,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const operator = await getCurrentOperator();
 
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (!operator) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
-
-  const operator = auth.operator;
 
   try {
     const body = await req.json();
@@ -110,6 +108,51 @@ export async function POST(req: NextRequest) {
 
     if (!items.length) {
       return NextResponse.json({ error: "请至少添加一个商品" }, { status: 400 });
+    }
+
+    const access = await getAccessibleBrands(operator);
+
+    if (!access.isAdmin) {
+      if (!access.brands.length) {
+        return NextResponse.json(
+          { error: "该供应商没有绑定任何品牌，不能添加订单" },
+          { status: 403 }
+        );
+      }
+
+      const inventoryIds = items
+        .map((item: any) => Number(item.inventory_item_id))
+        .filter(Boolean);
+
+      const { data: inventoryRows, error: inventoryError } = await supabase
+        .from("inventory_items")
+        .select("id, brand_name")
+        .in("id", inventoryIds);
+
+      if (inventoryError) {
+        return NextResponse.json(
+          { error: inventoryError.message },
+          { status: 500 }
+        );
+      }
+
+      const invalidItem = (inventoryRows || []).find(
+        (item: any) => !access.brands.includes(item.brand_name)
+      );
+
+      if (invalidItem) {
+        return NextResponse.json(
+          { error: "供应商只能添加自己绑定品牌的商品" },
+          { status: 403 }
+        );
+      }
+
+      if ((inventoryRows || []).length !== inventoryIds.length) {
+        return NextResponse.json(
+          { error: "存在无效商品，不能添加订单" },
+          { status: 400 }
+        );
+      }
     }
 
     const { data, error } = await supabase.rpc("create_order_with_inventory_items", {

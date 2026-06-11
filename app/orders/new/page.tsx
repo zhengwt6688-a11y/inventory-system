@@ -55,7 +55,7 @@ export default function NewOrderPage() {
   async function loadInventoryOptions() {
     try {
       setLoading(true);
-      const res = await fetch("/api/inventory-options");
+      const res = await fetch("/api/inventory-options", { cache: "no-store" });
       const data = await res.json();
 
       if (!res.ok) {
@@ -192,7 +192,7 @@ export default function NewOrderPage() {
   }
 
   return (
-    <DashboardShell adminOnly>
+    <DashboardShell>
       <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>添加订单</h1>
 
       <Card style={{ marginBottom: 24 }}>

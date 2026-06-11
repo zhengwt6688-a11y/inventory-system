@@ -232,13 +232,11 @@ export default function OrdersPage() {
 
       <Card style={{ marginBottom: 24 }}>
         <Space wrap>
-          {isAdmin ? (
-            <Button type="primary" href="/orders/new">
-              添加订单
-            </Button>
-          ) : (
-            <Tag color="blue">当前为供应商权限</Tag>
-          )}
+          <Button type="primary" href="/orders/new">
+            添加订单
+          </Button>
+
+          {!isAdmin ? <Tag color="blue">供应商只能添加自己品牌订单</Tag> : null}
 
           <RangePicker
             value={exportRange}

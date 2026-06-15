@@ -37,6 +37,7 @@ const BRAND_OPTIONS = [
   { label: "Gunnpod", value: "Gunnpod" },
   { label: "Alfakher", value: "Alfakher" },
   { label: "Uwin", value: "Uwin" },
+  { label: "五叶神", value: "五叶神"}
 ];
 
 const LOW_STOCK_THRESHOLD = 5;

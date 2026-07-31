@@ -39,6 +39,7 @@ const BRAND_OPTIONS = [
   { label: "Uwin", value: "Uwin" },
   { label: "五叶神", value: "五叶神"},
   { label: "Swix", value: "Swix"},
+  { label: "IGET MOON", value: "IGET MOON"},
 ];
 
 const LOW_STOCK_THRESHOLD = 5;

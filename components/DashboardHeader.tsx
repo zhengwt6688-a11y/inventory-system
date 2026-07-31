@@ -34,6 +34,8 @@ export default function DashboardHeader({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap",
         marginBottom: 24,
         paddingBottom: 16,
         borderBottom: "1px solid #f0f0f0",
@@ -43,10 +45,16 @@ export default function DashboardHeader({
         当前用户：{displayName}（{role}）
       </div>
 
-      <Space>
+      <Space wrap>
         <Button href="/inventory">库存</Button>
         <Button href="/orders">订单</Button>
-        {role === "admin" ? <Button href="/users">用户管理</Button> : null}
+
+        {role === "admin" ? (
+          <>
+            <Button href="/users">用户管理</Button>
+          </>
+        ) : null}
+
         <Button danger onClick={handleLogout}>
           退出登录
         </Button>
